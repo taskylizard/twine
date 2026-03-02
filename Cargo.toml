@@ -1,0 +1,35 @@
+[package]
+name = "nyagit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.8"
+chrono = { version = "0.4", features = ["serde"] }
+clap = "4.5.20"
+color-eyre = { version = "0.6.5", features = ["capture-spantrace", "issue-url"] }
+confique = { version = "0.4.0", features = ["toml"] }
+dotenvy = "0.15"
+eyre = "0.6.12"
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1.43"
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.22", features = [
+  "chrono",
+  "env-filter",
+  "serde",
+  "time"
+] }
+url = "2"
+urlencoding = "2.1"
+utoipa = { version = "5.4.0", features = [
+  "auto_into_responses",
+  "axum_extras",
+  "chrono",
+  "config",
+  "debug",
+  "url",
+  "uuid"
+] }
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }
+uuid = { version = "1.19.0", features = ["v4"] }
