@@ -1,0 +1,10 @@
+bind_addr = "0.0.0.0:3000"
+log_filter = "info"
+
+[git]
+repo_scan_path = "/home/git"
+metadata_db_path = "/home/git/.twine-git-operations-metadata"
+metadata_reindex_interval_secs = 300
+readme_cache_capacity = 128
+diff_cache_capacity = 128
+cache_ttl_secs = 300

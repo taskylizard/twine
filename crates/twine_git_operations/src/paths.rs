@@ -28,8 +28,8 @@ mod tests {
 
     #[test]
     fn test_repo_path_uses_expected_layout() {
-        let path = repo_path(Path::new("/home/git"), "alice", "myrepo")
-            .expect("path should resolve");
+        let path =
+            repo_path(Path::new("/home/git"), "alice", "myrepo").expect("path should resolve");
         assert_eq!(path.to_string_lossy(), "/home/git/alice/myrepo");
     }
 

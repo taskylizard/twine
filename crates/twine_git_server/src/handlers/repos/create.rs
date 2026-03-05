@@ -8,6 +8,7 @@ use axum::{
 };
 use serde::Deserialize;
 use tracing::info;
+use utoipa::ToSchema;
 
 use crate::{
     auth::actor_id,
@@ -15,7 +16,7 @@ use crate::{
     state::{AppState, Repo, RepoRole},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub(crate) struct CreateRepoRequest {
     owner: String,
     repo: String,
@@ -43,15 +44,17 @@ pub(crate) async fn handler(
         );
     }
 
-    let mut repos = state.repos.write().await;
     let key = (req.owner.clone(), req.repo.clone());
 
-    if repos.contains_key(&key) {
-        return api_error(
-            StatusCode::CONFLICT,
-            "AlreadyExists",
-            "repository already exists",
-        );
+    {
+        let repos = state.repos.read().await;
+        if repos.contains_key(&key) {
+            return api_error(
+                StatusCode::CONFLICT,
+                "AlreadyExists",
+                "repository already exists",
+            );
+        }
     }
 
     let mut members = HashMap::new();
@@ -66,9 +69,6 @@ pub(crate) async fn handler(
         tags: Vec::new(),
         members,
     };
-
-    info!(owner = %repo.owner, repo = %repo.name, "created repository");
-    repos.insert(key, repo.clone());
 
     if let Err(error) = state.git.upsert_metadata_snapshot(
         &repo.owner,
@@ -85,5 +85,25 @@ pub(crate) async fn handler(
         );
     }
 
+    let snapshot = {
+        let mut repos = state.repos.write().await;
+        repos.insert(key.clone(), repo.clone());
+        repos.values().cloned().collect::<Vec<_>>()
+    };
+
+    if let Err(error) = state.persist_repo_catalog(snapshot).await {
+        tracing::error!(owner = %repo.owner, repo = %repo.name, ?error, "failed to persist repository catalog");
+
+        let mut repos = state.repos.write().await;
+        repos.remove(&key);
+
+        return api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalError",
+            "failed to persist repository catalog",
+        );
+    }
+
+    info!(owner = %repo.owner, repo = %repo.name, "created repository");
     (StatusCode::CREATED, Json(repo)).into_response()
 }

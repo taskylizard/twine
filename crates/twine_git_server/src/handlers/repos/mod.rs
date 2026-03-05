@@ -1,9 +1,9 @@
-mod add_member;
-mod create;
-mod delete;
-mod get;
-mod list_branches;
-mod list_tags;
+pub(crate) mod add_member;
+pub(crate) mod create;
+pub(crate) mod delete;
+pub(crate) mod get;
+pub(crate) mod list_branches;
+pub(crate) mod list_tags;
 
 use axum::{
     Router,

@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 use tracing::debug;
+use utoipa::ToSchema;
 
 use crate::{
     auth::{actor_id, lookup_role},
@@ -13,7 +14,7 @@ use crate::{
     state::{AppState, RepoRole},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub(crate) struct AddMemberRequest {
     owner: String,
     repo: String,
@@ -34,30 +35,58 @@ pub(crate) async fn handler(
         );
     };
 
-    let mut repos = state.repos.write().await;
     let key = (req.owner, req.repo);
-    let Some(repo) = repos.get_mut(&key) else {
-        return api_error(StatusCode::NOT_FOUND, "NotFound", "repository not found");
+    let member_id = req.member_id;
+    let member_role = req.role;
+
+    let (repo_snapshot, previous_member_role, repos_snapshot) = {
+        let mut repos = state.repos.write().await;
+        let Some(repo) = repos.get_mut(&key) else {
+            return api_error(StatusCode::NOT_FOUND, "NotFound", "repository not found");
+        };
+
+        let Some(role) = lookup_role(repo, actor) else {
+            return api_error(
+                StatusCode::FORBIDDEN,
+                "Forbidden",
+                "actor has no role in this repository",
+            );
+        };
+
+        if !role.can_admin() {
+            return api_error(
+                StatusCode::FORBIDDEN,
+                "Forbidden",
+                "only owners may manage members",
+            );
+        }
+
+        debug!(repo = %repo.name, actor = actor, member = %member_id, "adding member");
+        let previous_member_role = repo.members.insert(member_id.clone(), member_role);
+        let repo_snapshot = repo.clone();
+        let repos_snapshot = repos.values().cloned().collect::<Vec<_>>();
+
+        (repo_snapshot, previous_member_role, repos_snapshot)
     };
 
-    let Some(role) = lookup_role(repo, actor) else {
-        return api_error(
-            StatusCode::FORBIDDEN,
-            "Forbidden",
-            "actor has no role in this repository",
-        );
-    };
+    if let Err(error) = state.persist_repo_catalog(repos_snapshot).await {
+        tracing::error!(owner = %repo_snapshot.owner, repo = %repo_snapshot.name, ?error, "failed to persist repository catalog after membership update");
 
-    if !role.can_admin() {
+        let mut repos = state.repos.write().await;
+        if let Some(repo) = repos.get_mut(&key) {
+            if let Some(previous_role) = previous_member_role {
+                repo.members.insert(member_id, previous_role);
+            } else {
+                repo.members.remove(&member_id);
+            }
+        }
+
         return api_error(
-            StatusCode::FORBIDDEN,
-            "Forbidden",
-            "only owners may manage members",
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalError",
+            "failed to persist repository catalog",
         );
     }
 
-    debug!(repo = %repo.name, actor = actor, member = %req.member_id, "adding member");
-    repo.members.insert(req.member_id, req.role);
-
-    (StatusCode::OK, Json(repo.clone())).into_response()
+    (StatusCode::OK, Json(repo_snapshot)).into_response()
 }

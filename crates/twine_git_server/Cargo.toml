@@ -6,11 +6,14 @@ edition = "2024"
 [dependencies]
 axum.workspace = true
 eyre.workspace = true
+git2.workspace = true
 twine_git_operations.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+utoipa.workspace = true
+utoipa-scalar.workspace = true
 
 [dev-dependencies]
 tower.workspace = true

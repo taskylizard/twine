@@ -13,7 +13,7 @@ pub(crate) async fn handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((owner, repo)): Path<(String, String)>,
-    _: Body,
+    body: Body,
 ) -> Response {
-    service_post(state, headers, owner, repo, "git-receive-pack").await
+    service_post(state, headers, owner, repo, "git-receive-pack", body).await
 }

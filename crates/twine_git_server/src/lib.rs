@@ -1,17 +1,28 @@
 mod auth;
+mod docs;
 mod errors;
 mod handlers;
 mod state;
 
 use axum::Router;
+use utoipa::OpenApi;
+use utoipa_scalar::{Scalar, Servable};
+
 pub use state::{Repo, RepoRole};
 
 pub fn router() -> Router {
-    let state = state::AppState::default();
+    router_with_state(state::AppState::default())
+}
 
+pub fn router_with_git_config(config: twine_git_operations::GitConfig) -> Router {
+    router_with_state(state::AppState::from_git_config(config))
+}
+
+fn router_with_state(state: state::AppState) -> Router {
     Router::new()
         .merge(handlers::repos::router())
         .merge(handlers::git::router())
+        .merge(Scalar::with_url("/scalar", docs::ApiDoc::openapi()))
         .with_state(state)
 }
 

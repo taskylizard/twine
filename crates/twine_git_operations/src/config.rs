@@ -13,15 +13,15 @@ pub struct GitConfig {
 
 impl Default for GitConfig {
     fn default() -> Self {
-        let repo_scan_path = env::var("KNOT_REPO_SCAN_PATH")
+        let repo_scan_path = env::var("TWINE_REPO_SCAN_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("/home/git"));
 
-        let metadata_db_path = env::var("KNOT_METADATA_DB_PATH")
+        let metadata_db_path = env::var("TWINE_METADATA_DB_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| repo_scan_path.join(".twine-git-operations-metadata"));
 
-        let metadata_reindex_interval = env::var("KNOT_METADATA_REINDEX_INTERVAL_SECS")
+        let metadata_reindex_interval = env::var("TWINE_METADATA_REINDEX_INTERVAL_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .map(Duration::from_secs)

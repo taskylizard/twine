@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 use crate::{
     auth::{actor_id, lookup_role},
@@ -12,7 +13,7 @@ use crate::{
     state::AppState,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub(crate) struct GetRepoQuery {
     owner: String,
     repo: String,
