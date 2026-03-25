@@ -1,7 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use eyre::{Context, Result};
-use git2::{DiffFormat, DiffOptions, ObjectType, Repository};
+use git2::{DiffFormat, DiffOptions, Repository};
 
 use crate::{cache::RenderCache, config::GitConfig, paths};
 
@@ -27,33 +27,29 @@ impl RepoReader {
         }
 
         let repo_path = paths::repo_path(&self.config.repo_scan_path, owner, repo)?;
-        let _gix_repo = gix::open(&repo_path)
+        let repository = gix::open(&repo_path)
             .with_context(|| format!("failed to open repo with gix at {}", repo_path.display()))?;
 
-        let repository = Repository::open_bare(&repo_path)
-            .or_else(|_| Repository::open(&repo_path))
-            .with_context(|| format!("failed to open repository at {}", repo_path.display()))?;
-
         let object = repository
-            .revparse_single(rev)
-            .with_context(|| format!("failed to resolve revision {rev}"))?;
+            .rev_parse_single(rev)
+            .with_context(|| format!("failed to resolve revision {rev}"))?
+            .object()
+            .context("failed to find revision object")?;
         let commit = object
             .peel_to_commit()
             .context("revision is not a commit")?;
-        let tree = commit.tree().context("failed to read commit tree")?;
+        let mut tree = commit.tree().context("failed to read commit tree")?;
 
         for candidate in &self.config.readme_names {
-            if let Ok(entry) = tree.get_path(Path::new(candidate))
-                && entry.kind() == Some(ObjectType::Blob)
-            {
-                let blob = repository
-                    .find_blob(entry.id())
-                    .context("failed to load readme blob")?;
-                let rendered = String::from_utf8_lossy(blob.content()).to_string();
-                self.cache
-                    .insert_readme(cache_key.clone(), rendered.clone())
-                    .await;
-                return Ok(Some(rendered));
+            if let Some(entry) = tree.peel_to_entry_by_path(candidate)? {
+                let object = entry.object().context("failed to load entry object")?;
+                if let Ok(blob) = object.try_into_blob() {
+                    let rendered = String::from_utf8_lossy(&blob.data).to_string();
+                    self.cache
+                        .insert_readme(cache_key.clone(), rendered.clone())
+                        .await;
+                    return Ok(Some(rendered));
+                }
             }
         }
 
@@ -73,9 +69,6 @@ impl RepoReader {
         }
 
         let repo_path = paths::repo_path(&self.config.repo_scan_path, owner, repo)?;
-        let _gix_repo = gix::open(&repo_path)
-            .with_context(|| format!("failed to open repo with gix at {}", repo_path.display()))?;
-
         let repository = Repository::open_bare(&repo_path)
             .or_else(|_| Repository::open(&repo_path))
             .with_context(|| format!("failed to open repository at {}", repo_path.display()))?;

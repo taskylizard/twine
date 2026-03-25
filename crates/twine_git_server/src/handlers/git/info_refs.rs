@@ -4,7 +4,6 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
-use git2::Repository;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -95,9 +94,7 @@ fn read_advertised_refs(state: &AppState, owner: &str, repo: &str) -> Vec<(Strin
         }
     };
 
-    let repository = match Repository::open_bare(&repo_path)
-        .or_else(|_| Repository::open(&repo_path))
-    {
+    let repository = match gix::open(&repo_path) {
         Ok(repository) => repository,
         Err(error) => {
             tracing::warn!(owner, repo, path = %repo_path.display(), ?error, "failed to open repository for info/refs advertisement");
@@ -106,8 +103,21 @@ fn read_advertised_refs(state: &AppState, owner: &str, repo: &str) -> Vec<(Strin
     };
 
     let mut refs = Vec::new();
-    let iterator = match repository.references() {
-        Ok(iterator) => iterator,
+    let platform = match repository.references() {
+        Ok(platform) => platform,
+        Err(error) => {
+            tracing::warn!(
+                owner,
+                repo,
+                ?error,
+                "failed to iterate repository refs for info/refs"
+            );
+            return Vec::new();
+        }
+    };
+
+    let iterator = match platform.all() {
+        Ok(iter) => iter,
         Err(error) => {
             tracing::warn!(
                 owner,
@@ -120,14 +130,11 @@ fn read_advertised_refs(state: &AppState, owner: &str, repo: &str) -> Vec<(Strin
     };
 
     for reference in iterator.flatten() {
-        let Some(name) = reference.name() else {
+        let name = reference.name().as_bstr().to_string();
+        let Some(target) = reference.try_id().map(|id| id.to_string()) else {
             continue;
         };
-        let Some(target) = reference.target() else {
-            continue;
-        };
-
-        refs.push((target.to_string(), name.to_owned()));
+        refs.push((target, name));
     }
 
     refs.sort_by(|left, right| left.1.cmp(&right.1));

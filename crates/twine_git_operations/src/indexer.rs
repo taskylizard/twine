@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use eyre::{Context, Result};
-use git2::Repository;
+use gix::refs::Category;
 use hashbrown::HashMap;
 use tracing::{debug, info};
 
@@ -43,39 +43,45 @@ impl MetadataIndexer {
     pub async fn reindex(&self, repo: &RepoKey) -> Result<ReindexOutcome> {
         let repo_path = paths::repo_path(&self.config.repo_scan_path, &repo.owner, &repo.repo)?;
 
-        let _gix_repo = gix::open(&repo_path)
-            .with_context(|| format!("failed to open repo with gix at {}", repo_path.display()))?;
-
-        let git2_repo = Repository::open_bare(&repo_path)
-            .or_else(|_| Repository::open(&repo_path))
-            .with_context(|| format!("failed to open repository at {}", repo_path.display()))?;
+        let gix_repo = gix::open(&repo_path)
+            .with_context(|| format!("failed to open repo at {}", repo_path.display()))?;
 
         let mut branch_names = Vec::new();
         let mut tag_names = Vec::new();
         let mut head_oids = HashMap::new();
 
-        for reference in git2_repo.references().context("failed to iterate refs")? {
-            let reference = reference.context("failed to read reference")?;
-            let Some(name) = reference.name() else {
+        for reference in gix_repo
+            .references()
+            .context("failed to iterate refs")?
+            .all()
+            .context("failed to list all refs")?
+        {
+            let Ok(mut reference) = reference else {
                 continue;
             };
 
-            if let Some(oid) = reference.target() {
-                head_oids.insert(name.to_owned(), oid.to_string());
+            let ref_name = reference.name().as_bstr().to_string();
+
+            if let Ok(id) = reference.peel_to_id() {
+                head_oids.insert(ref_name.clone(), id.to_string());
             }
 
-            if let Some(branch) = name.strip_prefix("refs/heads/") {
-                branch_names.push(branch.to_owned());
-            }
-            if let Some(tag) = name.strip_prefix("refs/tags/") {
-                tag_names.push(tag.to_owned());
+            match reference.name().category() {
+                Some(Category::LocalBranch) => {
+                    branch_names.push(reference.name().shorten().to_string());
+                }
+                Some(Category::Tag) => {
+                    tag_names.push(reference.name().shorten().to_string());
+                }
+                _ => {}
             }
         }
 
-        let default_branch = git2_repo
-            .head()
+        let default_branch = gix_repo
+            .head_name()
             .ok()
-            .and_then(|head| head.shorthand().map(str::to_owned))
+            .flatten()
+            .map(|name| name.shorten().to_string())
             .or_else(|| branch_names.first().cloned())
             .unwrap_or_else(|| "main".to_owned());
 

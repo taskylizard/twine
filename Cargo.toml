@@ -14,7 +14,7 @@ gix = { version = "0.74.1", features = ["tracing", "parallel", "blob-diff", "rev
 hashbrown = { version = "0.15.4", features = ["serde"] }
 itertools = "0.14.0"
 moka = { version = "0.12.10", features = ["future"] }
-rocksdb = { version = "0.24.0", default-features = false, features = ["snappy"] }
+rocksdb = { version = "0.24.0", default-features = false, features = ["snappy", "bindgen-runtime"] }
 utoipa = { version = "5.4.0", features = ["auto_into_responses", "axum_extras", "chrono", "config", "debug", "url", "uuid"] }
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 yoke = { version = "0.8.0", features = ["derive"] }
